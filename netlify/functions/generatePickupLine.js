@@ -4,6 +4,7 @@ const fetch = require("node-fetch");
 const rateLimitMap = new Map();
 
 exports.handler = async (event) => {
+  // Whitelisted origins (make sure these match exactly)
   const allowedOrigins = [
     "https://theboringrich.com",
     "https://www.theboringrich.com",
@@ -12,23 +13,46 @@ exports.handler = async (event) => {
   const requestOrigin = event.headers.origin || "";
   const allowOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : "";
 
+  // Always include CORS headers in any response
+  const baseHeaders = {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS"
+  };
+
   // Handle CORS preflight
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
-      headers: corsHeaders(allowOrigin),
-      body: "OK",
+      headers: baseHeaders,
+      body: "OK"
     };
   }
 
-  // Verify API key
+  // If origin is not allowed, reject outright
+  if (!allowOrigin) {
+    return {
+      statusCode: 403,
+      headers: baseHeaders,
+      body: JSON.stringify({ error: "CORS error: Origin not allowed" })
+    };
+  }
+
+  // Verify OPENAI_API_KEY is set
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return errorResponse(500, "OPENAI_API_KEY is not set", allowOrigin);
+    return {
+      statusCode: 500,
+      headers: baseHeaders,
+      body: JSON.stringify({ error: "OPENAI_API_KEY is not set" })
+    };
   }
 
   // Rate-limit: max 3 pickup lines per IP per day
-  const userIP = event.headers["x-nf-client-connection-ip"] || "unknown";
+  const userIP = 
+    event.headers["x-nf-client-connection-ip"] ||
+    event.headers["client-ip"] ||
+    "unknown";
   const usage  = rateLimitMap.get(userIP) || { count: 0, lastUsed: Date.now() };
   const today  = new Date().toDateString();
   const lastUsedDay = new Date(usage.lastUsed).toDateString();
@@ -36,24 +60,28 @@ exports.handler = async (event) => {
   if (usage.count >= 3 && today === lastUsedDay) {
     return {
       statusCode: 429,
-      headers: corsHeaders(allowOrigin),
+      headers: baseHeaders,
       body: JSON.stringify({
-        error: "⛔ You’ve reached your daily limit of 3 pickup lines. Please come back tomorrow.",
-      }),
+        error: "⛔ You’ve reached your daily limit of 3 pickup lines. Please come back tomorrow."
+      })
     };
   }
 
-  // Parse and validate input
+  // Parse & validate JSON body
   let context;
   try {
-    const parsed = JSON.parse(event.body || "{}");
-    context = parsed.context?.trim();
+    const body = JSON.parse(event.body || "{}");
+    context = (body.context || "").trim();
     if (!context) throw new Error("Context is required.");
   } catch (err) {
-    return errorResponse(400, "Invalid request body", allowOrigin, err.message);
+    return {
+      statusCode: 400,
+      headers: baseHeaders,
+      body: JSON.stringify({ error: "Invalid request body", details: err.message })
+    };
   }
 
-  // Build ChatGPT prompt
+  // Build the ChatGPT prompt
   const prompt = `
 You are a witty romance guru. Generate exactly one clever, shareable pickup line tailored to this context:
 "${context}"
@@ -64,67 +92,56 @@ The pickup line should be:
 - Perfect for “I asked AI for a pickup line and it said…” social posts
 
 Return only that single line (no extra commentary).
-`;
+  `;
 
   try {
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: \`Bearer \${apiKey}\`,
+        Authorization: \`Bearer \${apiKey}\`
       },
       body: JSON.stringify({
         model: "gpt-3.5-turbo",
         messages: [{ role: "user", content: prompt }],
         max_tokens: 60,
-        temperature: 0.8,
-      }),
+        temperature: 0.8
+      })
     });
 
     if (!openaiRes.ok) {
       const errorData = await openaiRes.json();
-      return errorResponse(
-        openaiRes.status,
-        "OpenAI error",
-        allowOrigin,
-        errorData.error?.message || "Unknown error"
-      );
+      return {
+        statusCode: openaiRes.status,
+        headers: baseHeaders,
+        body: JSON.stringify({
+          error: "OpenAI API error",
+          details: errorData.error?.message || "Unknown error"
+        })
+      };
     }
 
     const data = await openaiRes.json();
-    const pickupLine = data?.choices?.[0]?.message?.content?.trim();
+    const pickupLine = (data.choices?.[0]?.message?.content || "").trim();
     if (!pickupLine) throw new Error("Unexpected OpenAI response format");
 
     // Update rate-limit usage
     rateLimitMap.set(userIP, {
       count: today === lastUsedDay ? usage.count + 1 : 1,
-      lastUsed: Date.now(),
+      lastUsed: Date.now()
     });
 
     return {
       statusCode: 200,
-      headers: corsHeaders(allowOrigin),
-      body: JSON.stringify({ pickupLine }),
+      headers: baseHeaders,
+      body: JSON.stringify({ pickupLine })
     };
   } catch (err) {
-    return errorResponse(500, "Failed to generate pickup line", allowOrigin, err.message);
+    return {
+      statusCode: 500,
+      headers: baseHeaders,
+      body: JSON.stringify({ error: "Failed to generate pickup line", details: err.message })
+    };
   }
 };
 
-// Helper: CORS headers
-function corsHeaders(origin) {
-  return {
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
-}
-
-// Helper: JSON error response
-function errorResponse(status, message, origin, detail = "") {
-  return {
-    statusCode: status,
-    headers: corsHeaders(origin),
-    body: JSON.stringify({ error: message, details: detail }),
-  };
-}
