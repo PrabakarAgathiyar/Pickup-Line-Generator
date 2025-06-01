@@ -99,7 +99,7 @@
       font-size: 1.05rem;
     }
 
-    /* Bulleted list styling (if needed) */
+    /* Bulleted list styling (if any) */
     #line-result ul {
       padding-left: 1.25rem;
       margin: 0.5rem 0 1.25rem;
@@ -179,8 +179,7 @@
         }
 
         try {
-          // Use your actual Netlify URL here:
-          const FUNCTION_URL = "https://preeminent-figolla-2868c8.netlify.app/.netlify/functions/generatePickupLine";
+          const FUNCTION_URL = "https://unrivaled-crepe-3f7355.netlify.app/.netlify/functions/generatePickupLine";
           const response = await fetch(FUNCTION_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -213,9 +212,7 @@
 
       function formatLine(text) {
         let html = text
-          // Bold “Pickup Line:” if included
           .replace(/^(Pickup Line:?)/gm, "<strong>$1</strong>")
-          // If returned as "- something", convert to list
           .replace(/^- (.+)$/gm, "<li>$1</li>")
           .replace(/(<li>.*<\/li>)/gs, "<ul>$1</ul>")
           .replace(/\n{2,}/g, "<br><br>");
