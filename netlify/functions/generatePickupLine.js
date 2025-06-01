@@ -4,16 +4,18 @@ const fetch = require("node-fetch");
 const rateLimitMap = new Map();
 
 exports.handler = async (event) => {
-  // Whitelisted origins (make sure these match exactly)
-  const allowedOrigins = [
-    "https://theboringrich.com",
-    "https://www.theboringrich.com",
-    "https://unrivaled-crepe-3f7355.netlify.app"
-  ];
+  // Allowed exact Netlify URL
+  const allowedNetlify = "https://unrivaled-crepe-3f7355.netlify.app";
   const requestOrigin = event.headers.origin || "";
-  const allowOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : "";
 
-  // Always include CORS headers in any response
+  // If origin ends with theboringrich.com OR matches Netlify URL, allow it
+  const isWordpress =
+    requestOrigin.endsWith("://theboringrich.com") ||
+    requestOrigin.endsWith("://www.theboringrich.com");
+  const isNetlify = requestOrigin === allowedNetlify;
+  const allowOrigin = isWordpress || isNetlify ? requestOrigin : "";
+
+  // Always include CORS headers in every response
   const baseHeaders = {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers": "Content-Type",
@@ -49,12 +51,12 @@ exports.handler = async (event) => {
   }
 
   // Rate-limit: max 3 pickup lines per IP per day
-  const userIP = 
+  const userIP =
     event.headers["x-nf-client-connection-ip"] ||
     event.headers["client-ip"] ||
     "unknown";
-  const usage  = rateLimitMap.get(userIP) || { count: 0, lastUsed: Date.now() };
-  const today  = new Date().toDateString();
+  const usage = rateLimitMap.get(userIP) || { count: 0, lastUsed: Date.now() };
+  const today = new Date().toDateString();
   const lastUsedDay = new Date(usage.lastUsed).toDateString();
 
   if (usage.count >= 3 && today === lastUsedDay) {
@@ -122,7 +124,7 @@ Return only that single line (no extra commentary).
     }
 
     const data = await openaiRes.json();
-    const pickupLine = (data.choices?.[0]?.message?.content || "").trim();
+    const pickupLine = data?.choices?.[0]?.message?.content?.trim();
     if (!pickupLine) throw new Error("Unexpected OpenAI response format");
 
     // Update rate-limit usage
@@ -144,4 +146,3 @@ Return only that single line (no extra commentary).
     };
   }
 };
-
