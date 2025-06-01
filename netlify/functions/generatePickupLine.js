@@ -1,31 +1,50 @@
+// netlify/functions/generatePickupLine.js
 const fetch = require("node-fetch");
 
 // In-memory IP rate-limit tracker
 const rateLimitMap = new Map();
 
 exports.handler = async (event) => {
-  // Always allow any origin (for now)
-  const baseHeaders = {
-    "Access-Control-Allow-Origin": "*",
+  // Whitelist the exact origins (match the Roast‐Comeback setup)
+  const allowedOrigins = [
+    "https://theboringrich.com",
+    "https://www.theboringrich.com",
+    "https://unrivaled-crepe-3f7355.netlify.app"
+  ];
+  const requestOrigin = event.headers.origin || "";
+  const allowOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : "";
+
+  // Always send CORS headers (even on errors)
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS"
   };
 
-  // Handle CORS preflight
+  // Preflight OPTIONS
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
-      headers: baseHeaders,
+      headers: corsHeaders,
       body: "OK"
     };
   }
 
-  // Verify OPENAI_API_KEY
+  // If origin isn’t whitelisted, reject
+  if (!allowOrigin) {
+    return {
+      statusCode: 403,
+      headers: corsHeaders,
+      body: JSON.stringify({ error: "CORS error: Origin not allowed" })
+    };
+  }
+
+  // Ensure OPENAI_API_KEY exists
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return {
       statusCode: 500,
-      headers: baseHeaders,
+      headers: corsHeaders,
       body: JSON.stringify({ error: "OPENAI_API_KEY is not set" })
     };
   }
@@ -42,7 +61,7 @@ exports.handler = async (event) => {
   if (usage.count >= 3 && today === lastUsedDay) {
     return {
       statusCode: 429,
-      headers: baseHeaders,
+      headers: corsHeaders,
       body: JSON.stringify({
         error: "⛔ You’ve reached your daily limit of 3 pickup lines. Please come back tomorrow."
       })
@@ -58,7 +77,7 @@ exports.handler = async (event) => {
   } catch (err) {
     return {
       statusCode: 400,
-      headers: baseHeaders,
+      headers: corsHeaders,
       body: JSON.stringify({ error: "Invalid request body", details: err.message })
     };
   }
@@ -74,7 +93,7 @@ The pickup line should be:
 - Perfect for “I asked AI for a pickup line and it said…” social posts
 
 Return only that single line (no extra commentary).
-`;
+  `;
 
   try {
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -92,20 +111,22 @@ Return only that single line (no extra commentary).
     });
 
     if (!openaiRes.ok) {
-      const errorData = await openaiRes.json();
+      const errData = await openaiRes.json();
       return {
         statusCode: openaiRes.status,
-        headers: baseHeaders,
+        headers: corsHeaders,
         body: JSON.stringify({
           error: "OpenAI API error",
-          details: errorData.error?.message || "Unknown error"
+          details: errData.error?.message || "Unknown error"
         })
       };
     }
 
     const data = await openaiRes.json();
     const pickupLine = data?.choices?.[0]?.message?.content?.trim();
-    if (!pickupLine) throw new Error("Unexpected OpenAI response format");
+    if (!pickupLine) {
+      throw new Error("Unexpected OpenAI response format");
+    }
 
     // Update rate-limit usage
     rateLimitMap.set(userIP, {
@@ -115,13 +136,13 @@ Return only that single line (no extra commentary).
 
     return {
       statusCode: 200,
-      headers: baseHeaders,
+      headers: corsHeaders,
       body: JSON.stringify({ pickupLine })
     };
   } catch (err) {
     return {
       statusCode: 500,
-      headers: baseHeaders,
+      headers: corsHeaders,
       body: JSON.stringify({ error: "Failed to generate pickup line", details: err.message })
     };
   }
