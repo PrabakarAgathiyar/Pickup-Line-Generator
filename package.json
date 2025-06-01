@@ -1,0 +1,10 @@
+{
+  "name": "pickup-line-generator",
+  "version": "1.0.0",
+  "description": "Pickup Line Generator using Netlify Functions + OpenAI",
+  "main": "index.js",
+  "type": "commonjs",
+  "dependencies": {
+    "node-fetch": "^2.6.9"
+  }
+}

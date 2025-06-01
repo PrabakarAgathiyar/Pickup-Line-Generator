@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pickup Line Generator</title>
+  <style>
+    /* Container */
+    #pickup-generator {
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 1rem;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+      color: #000;
+    }
+
+    /* Heading */
+    #pickup-generator h2 {
+      text-align: center;
+      font-size: 1.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Rate-limit Notice */
+    #pickup-generator .notice {
+      text-align: center;
+      color: #de2a4e;
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+    }
+
+    /* Textarea */
+    #pickup-generator textarea {
+      width: 100%;
+      height: 180px;
+      padding: 1rem;
+      font-size: 1.125rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-sizing: border-box;
+      resize: vertical;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Examples line */
+    #pickup-generator .examples {
+      font-size: 0.9rem;
+      color: #555;
+      margin-bottom: 1rem;
+    }
+
+    /* Generate button */
+    #pickup-generator button {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: #de2a4e;
+      color: #fff;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      margin-bottom: 1rem;
+    }
+    #pickup-generator button:hover {
+      background-color: #000;
+    }
+
+    /* Loading / Error message */
+    #pickup-generator .message {
+      color: #de2a4e;
+      text-align: center;
+      margin-top: 1rem;
+      font-size: 1rem;
+    }
+
+    /* Result container */
+    #pickup-generator .result-container {
+      margin-top: 1.5rem;
+    }
+
+    #pickup-generator .result {
+      background-color: #f9f9f9;
+      padding: 1.5rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      line-height: 1.8;
+      white-space: normal;
+      word-wrap: break-word;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+    }
+
+    /* Bold “Pickup Line:” heading */
+    #line-result strong {
+      display: block;
+      font-weight: bold;
+      margin-top: 1.2rem;
+      font-size: 1.05rem;
+    }
+
+    /* Bulleted list styling (if needed) */
+    #line-result ul {
+      padding-left: 1.25rem;
+      margin: 0.5rem 0 1.25rem;
+    }
+    #line-result li {
+      margin-bottom: 0.5rem;
+    }
+    #line-result p {
+      margin: 0 0 1rem 0;
+    }
+
+    /* Copy button */
+    #copy-line-btn {
+      display: none;
+      width: 100%;
+      padding: 0.75rem;
+      font-size: 1rem;
+      background-color: #de2a4e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      margin-top: 1rem;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    #copy-line-btn:hover {
+      background-color: #000;
+    }
+  </style>
+</head>
+<body>
+  <div id="pickup-generator">
+    <h2>💘 Pickup Line Generator</h2>
+    <div class="notice">
+      You can generate up to 3 pickup lines per day – totally free!
+    </div>
+
+    <!-- Context textarea -->
+    <textarea
+      id="pickup-input"
+      placeholder="Describe the context or audience (e.g., ‘coffee shop crush’, ‘science enthusiast’, ‘gamer girl’)."
+      aria-label="Enter pickup line context"
+    ></textarea>
+    <!-- Examples -->
+    <div class="examples">
+      e.g., “I met a barista I like—give me a coffee-themed pickup line.”<br>
+      “Looking for a nerdy science pickup line.”<br>
+      “Need a funny pickup line for my Tinder bio.”
+    </div>
+
+    <button id="pickup-generate-btn">Generate Pickup Line</button>
+    <div class="message" id="pickup-message"></div>
+
+    <div class="result-container">
+      <div class="result" id="line-result"></div>
+      <button id="copy-line-btn">📋 Copy Pickup Line</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const btn       = document.getElementById("pickup-generate-btn");
+      const textarea  = document.getElementById("pickup-input");
+      const msg       = document.getElementById("pickup-message");
+      const resultDiv = document.getElementById("line-result");
+      const copyBtn   = document.getElementById("copy-line-btn");
+
+      btn.addEventListener("click", async () => {
+        msg.textContent    = "⏳ Generating your pickup line…";
+        resultDiv.innerHTML= "";
+        copyBtn.style.display = "none";
+
+        const contextText = textarea.value.trim();
+        if (!contextText) {
+          msg.textContent = "⚠️ Please describe your context or audience.";
+          return;
+        }
+
+        try {
+          // Use your actual Netlify URL here:
+          const FUNCTION_URL = "https://preeminent-figolla-2868c8.netlify.app/.netlify/functions/generatePickupLine";
+          const response = await fetch(FUNCTION_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ context: contextText }),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            msg.textContent = data.error || "⚠️ Something went wrong.";
+            return;
+          }
+
+          msg.textContent = "";
+          resultDiv.innerHTML = formatLine(data.pickupLine);
+          copyBtn.style.display = "block";
+        } catch (e) {
+          msg.textContent = "⚠️ Unable to connect to server.";
+        }
+      });
+
+      copyBtn.addEventListener("click", () => {
+        const textToCopy = resultDiv.innerText;
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          copyBtn.textContent = "✅ Copied!";
+          setTimeout(() => {
+            copyBtn.textContent = "📋 Copy Pickup Line";
+          }, 2000);
+        });
+      });
+
+      function formatLine(text) {
+        let html = text
+          // Bold “Pickup Line:” if included
+          .replace(/^(Pickup Line:?)/gm, "<strong>$1</strong>")
+          // If returned as "- something", convert to list
+          .replace(/^- (.+)$/gm, "<li>$1</li>")
+          .replace(/(<li>.*<\/li>)/gs, "<ul>$1</ul>")
+          .replace(/\n{2,}/g, "<br><br>");
+        return html;
+      }
+    })();
+  </script>
+</body>
+</html>
