@@ -5,7 +5,7 @@ const fetch = require("node-fetch");
 const rateLimitMap = new Map();
 
 exports.handler = async (event) => {
-  // Whitelist the exact origins (match the Roast‐Comeback setup)
+  // Whitelist of allowed origins
   const allowedOrigins = [
     "https://theboringrich.com",
     "https://www.theboringrich.com",
@@ -14,37 +14,37 @@ exports.handler = async (event) => {
   const requestOrigin = event.headers.origin || "";
   const allowOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : "";
 
-  // Always send CORS headers (even on errors)
-  const corsHeaders = {
+  // Always include these CORS headers in every response
+  const baseHeaders = {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS"
   };
 
-  // Preflight OPTIONS
+  // Handle CORS preflight request
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers: baseHeaders,
       body: "OK"
     };
   }
 
-  // If origin isn’t whitelisted, reject
+  // If origin is not whitelisted, reject the request
   if (!allowOrigin) {
     return {
       statusCode: 403,
-      headers: corsHeaders,
+      headers: baseHeaders,
       body: JSON.stringify({ error: "CORS error: Origin not allowed" })
     };
   }
 
-  // Ensure OPENAI_API_KEY exists
+  // Verify OPENAI_API_KEY
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return {
       statusCode: 500,
-      headers: corsHeaders,
+      headers: baseHeaders,
       body: JSON.stringify({ error: "OPENAI_API_KEY is not set" })
     };
   }
@@ -61,7 +61,7 @@ exports.handler = async (event) => {
   if (usage.count >= 3 && today === lastUsedDay) {
     return {
       statusCode: 429,
-      headers: corsHeaders,
+      headers: baseHeaders,
       body: JSON.stringify({
         error: "⛔ You’ve reached your daily limit of 3 pickup lines. Please come back tomorrow."
       })
@@ -77,30 +77,32 @@ exports.handler = async (event) => {
   } catch (err) {
     return {
       statusCode: 400,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: "Invalid request body", details: err.message })
+      headers: baseHeaders,
+      body: JSON.stringify({
+        error: "Invalid request body",
+        details: err.message
+      })
     };
   }
 
   // Build the ChatGPT prompt
-  const prompt = `
-You are a witty romance guru. Generate exactly one clever, shareable pickup line tailored to this context:
+  const prompt = 
+`You are a witty romance guru. Generate exactly one clever, shareable pickup line tailored to this context:
 "${context}"
 
 The pickup line should be:
 - Short and sweet
 - Memorable / meme-worthy
-- Perfect for “I asked AI for a pickup line and it said…” social posts
+- Perfect for "I asked AI for a pickup line and it said..." social posts
 
-Return only that single line (no extra commentary).
-  `;
+Return only that single line (no extra commentary).`;
 
   try {
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: \`Bearer \${apiKey}\`
+        Authorization: "Bearer " + apiKey
       },
       body: JSON.stringify({
         model: "gpt-3.5-turbo",
@@ -114,7 +116,7 @@ Return only that single line (no extra commentary).
       const errData = await openaiRes.json();
       return {
         statusCode: openaiRes.status,
-        headers: corsHeaders,
+        headers: baseHeaders,
         body: JSON.stringify({
           error: "OpenAI API error",
           details: errData.error?.message || "Unknown error"
@@ -123,7 +125,7 @@ Return only that single line (no extra commentary).
     }
 
     const data = await openaiRes.json();
-    const pickupLine = data?.choices?.[0]?.message?.content?.trim();
+    const pickupLine = data.choices?.[0]?.message?.content?.trim();
     if (!pickupLine) {
       throw new Error("Unexpected OpenAI response format");
     }
@@ -136,14 +138,17 @@ Return only that single line (no extra commentary).
 
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers: baseHeaders,
       body: JSON.stringify({ pickupLine })
     };
   } catch (err) {
     return {
       statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: "Failed to generate pickup line", details: err.message })
+      headers: baseHeaders,
+      body: JSON.stringify({
+        error: "Failed to generate pickup line",
+        details: err.message
+      })
     };
   }
 };
