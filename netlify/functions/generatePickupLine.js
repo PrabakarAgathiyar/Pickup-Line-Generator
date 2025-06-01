@@ -7,7 +7,7 @@ exports.handler = async (event) => {
   const allowedOrigins = [
     "https://theboringrich.com",
     "https://www.theboringrich.com",
-    "https://preeminent-figolla-2868c8.netlify.app"
+    "https://unrivaled-crepe-3f7355.netlify.app"
   ];
   const requestOrigin = event.headers.origin || "";
   const allowOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : "";
@@ -21,7 +21,7 @@ exports.handler = async (event) => {
     };
   }
 
-  // Check for API key
+  // Verify API key
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return errorResponse(500, "OPENAI_API_KEY is not set", allowOrigin);
@@ -43,7 +43,7 @@ exports.handler = async (event) => {
     };
   }
 
-  // Parse & validate input
+  // Parse and validate input
   let context;
   try {
     const parsed = JSON.parse(event.body || "{}");
@@ -53,7 +53,7 @@ exports.handler = async (event) => {
     return errorResponse(400, "Invalid request body", allowOrigin, err.message);
   }
 
-  // Build the ChatGPT prompt
+  // Build ChatGPT prompt
   const prompt = `
 You are a witty romance guru. Generate exactly one clever, shareable pickup line tailored to this context:
 "${context}"
@@ -67,12 +67,11 @@ Return only that single line (no extra commentary).
 `;
 
   try {
-    // Request OpenAI
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: \`Bearer \${apiKey}\`,
       },
       body: JSON.stringify({
         model: "gpt-3.5-turbo",
