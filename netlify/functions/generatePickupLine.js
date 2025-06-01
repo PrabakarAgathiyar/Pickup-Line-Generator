@@ -4,20 +4,9 @@ const fetch = require("node-fetch");
 const rateLimitMap = new Map();
 
 exports.handler = async (event) => {
-  // Allowed exact Netlify URL
-  const allowedNetlify = "https://unrivaled-crepe-3f7355.netlify.app";
-  const requestOrigin = event.headers.origin || "";
-
-  // If origin ends with theboringrich.com OR matches Netlify URL, allow it
-  const isWordpress =
-    requestOrigin.endsWith("://theboringrich.com") ||
-    requestOrigin.endsWith("://www.theboringrich.com");
-  const isNetlify = requestOrigin === allowedNetlify;
-  const allowOrigin = isWordpress || isNetlify ? requestOrigin : "";
-
-  // Always include CORS headers in every response
+  // Always allow any origin (for now)
   const baseHeaders = {
-    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS"
   };
@@ -31,16 +20,7 @@ exports.handler = async (event) => {
     };
   }
 
-  // If origin is not allowed, reject outright
-  if (!allowOrigin) {
-    return {
-      statusCode: 403,
-      headers: baseHeaders,
-      body: JSON.stringify({ error: "CORS error: Origin not allowed" })
-    };
-  }
-
-  // Verify OPENAI_API_KEY is set
+  // Verify OPENAI_API_KEY
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return {
@@ -94,7 +74,7 @@ The pickup line should be:
 - Perfect for “I asked AI for a pickup line and it said…” social posts
 
 Return only that single line (no extra commentary).
-  `;
+`;
 
   try {
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
